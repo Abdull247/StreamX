@@ -1,18 +1,41 @@
 import { formatViews } from '../utils/format.js';
 import './VideoCard.css';
 
-export default function VideoCard({ item, onClick }) {
+/**
+ * Video card. `onOpen` is called when the card is clicked (routes to details).
+ * Original-source link is provided as an escape hatch.
+ */
+export default function VideoCard({ item, onClick, onOpen }) {
   const thumb = item.thumb;
   const isHls = item.streams && item.streams.hls;
   const link = item.link || item.url;
+  const title = item.title || item.name || 'Untitled';
+
+  const handleActivate = () => {
+    if (onOpen) onOpen(item);
+    else if (onClick) onClick(item);
+  };
+
+  const handleKey = (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      handleActivate();
+    }
+  };
 
   return (
-    <article className="video-card" onClick={() => onClick && onClick(item)}>
+    <article
+      className="video-card"
+      role="button"
+      tabIndex={0}
+      onClick={handleActivate}
+      onKeyDown={handleKey}
+    >
       <div className="video-card__thumb">
         {thumb ? (
           <img
             src={thumb}
-            alt={item.title || 'Video'}
+            alt={title}
             loading="lazy"
             referrerPolicy="no-referrer"
           />
@@ -28,7 +51,7 @@ export default function VideoCard({ item, onClick }) {
       </div>
 
       <div className="video-card__body">
-        <h3 className="video-card__title">{item.title || 'Untitled'}</h3>
+        <h3 className="video-card__title">{title}</h3>
         <div className="video-card__meta">
           <span className="video-card__views">
             {item.views ? formatViews(item.views) + ' views' : ''}
