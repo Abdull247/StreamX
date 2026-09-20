@@ -1,0 +1,30 @@
+.load-more {
+  display: flex;
+  justify-content: center;
+  margin-top: 20px;
+}
+
+.load-more__btn {
+  background: var(--card-bg, #14141c);
+  color: var(--text, #f5f5f7);
+  border: 1px solid var(--card-border, rgba(255, 255, 255, 0.06));
+  border-radius: 999px;
+  padding: 11px 26px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.1s ease;
+}
+
+.load-more__btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.load-more__btn:active {
+  transform: scale(0.97);
+}
+
+.load-more__btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
