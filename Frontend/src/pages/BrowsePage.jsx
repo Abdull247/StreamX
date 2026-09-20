@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { xvideosHome, xvideosBest, enkuddiHome } from '../api/streams.js';
 import useCacheFetch from '../hooks/useCacheFetch.js';
 import { cacheKey, cacheGet, cacheSet } from '../utils/cache.js';
@@ -22,7 +22,7 @@ export default function BrowsePage({ onOpenVideo }) {
   const [items, setItems] = useState([]);
   const [page, setPage] = useState(0);
   const [loadingMore, setLoadingMore] = useState(false);
-  const pageRef = React.useRef(0);
+  const pageRef = useRef(0);
 
   const cacheKeyFor = (t, p) => cacheKey('browse', { tab: t, provider: providerId, page: p });
 
