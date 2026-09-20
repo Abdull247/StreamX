@@ -18,7 +18,10 @@ The React + Vite frontend for the StreamX multi-site video API.
   - HLS player via **hls.js** (falls back to native playback on Safari)
 - Click a video card anywhere to open its details page
 - "Load more" pagination on Home / Browse / Search
-- Settings page that shows the live backend status and the active base URL
+- **Providers** — a config-driven list exposed by `GET /api/providers`. In Settings you pick a default source; the whole app (Home, Browse, Search, Details) then calls the endpoints for that provider.
+- **Caching** — listings & details are cached (in-memory + sessionStorage, 5-min TTL) so navigating between pages doesn't re-fetch; Settings has a "Clear cache" button.
+- **Scroll preservation** — a `ScrollManager` records each page's scroll position and restores it when you come back (back/forward), instead of jumping to top.
+- Settings page shows the live backend status and the active base URL.
 
 ## Setup
 ```bash
@@ -43,15 +46,24 @@ the app also calls `VITE_API_BASE_URL` directly for all requests.
 ## Directory layout
 ```
 src/
-├── App.jsx              # routes + layout shell + shared handlers
+├── App.jsx              # routes + layout shell + provider context + ScrollManager
 ├── main.jsx             # React entry
 ├── api/
-│   ├── client.js        # fetch wrapper (reads VITE_API_BASE_URL)
-│   └── streams.js       # xvideos / enkuddi / health endpoint helpers
+│   ├── client.js        # fetch wrapper (reads VITE_API_BASE_URL; clientGet/clientPost)
+│   └── streams.js       # xvideos / enkuddi / health endpoint helpers (provider-aware)
 ├── hooks/
-│   └── useFetch.js      # data-fetching hook (onSuccess, refetch)
-├── components/          # BottomNav, VideoCard, SearchBar, Spinner, ErrorState, HlsPlayer, LoadMore
+│   ├── useFetch.js      # simple data-fetching hook (onSuccess, refetch)
+│   └── useCacheFetch.js # cache-first fetch (memory + sessionStorage, background refresh)
+├── components/          # BottomNav, VideoCard, SearchBar, Spinner, ErrorState, HlsPlayer, LoadMore, ScrollManager
 ├── pages/               # Home, Search, Browse, Video, Settings
 ├── styles/global.css    # theme tokens + layout
-└── utils/format.js      # views/duration formatting
+└── utils/
+    ├── format.js        # views/duration formatting
+    ├── cache.js         # in-memory + sessionStorage cache w/ TTL + clear()
+    ├── providers.js     # fetch providers + default selection (localStorage)
+    ├── providerContext.js # React context for the active provider
+    └── scroll.js        # scroll-position store + restore
 ```
+
+## API
+`GET /api/providers` → `{ default, providers: [...] }`, each provider `{ id, name, label, baseUrl, type }`.
