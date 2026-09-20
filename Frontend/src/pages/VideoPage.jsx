@@ -1,11 +1,12 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { xvideosDetails, xvideosRecommendations } from '../api/streams.js';
 import useFetch from '../hooks/useFetch.js';
 import VideoCard from '../components/VideoCard.jsx';
+import HlsPlayer from '../components/HlsPlayer.jsx';
 import Spinner from '../components/Spinner.jsx';
 import ErrorState from '../components/ErrorState.jsx';
-import { formatViews, formatDuration, toHttps } from '../utils/format.js';
+import { formatViews, formatDuration } from '../utils/format.js';
 import './VideoPage.css';
 
 export default function VideoPage() {
@@ -25,26 +26,50 @@ export default function VideoPage() {
     { deps: [videoUrl] }
   );
 
-  const [showRelated, setShowRelated] = useState(false);
-  const [relData, setRelData] = useState(null);
-  const [relLoading, setRelLoading] = useState(false);
+  // Recommendations: embedded `related` from /details initially,
+  // "More" button fetches /recommendations and appends.
+  const [related, setRelated] = useState([]);
+  const [recLoading, setRecLoading] = useState(false);
+  const [recError, setRecError] = useState(null);
+  const [recFetched, setRecFetched] = useState(false);
+  const [recLoaded, setRecLoaded] = useState(false); // whether the button has been pressed
 
-  const loadRelated = async () => {
-    setShowRelated(true);
-    setRelLoading(true);
-    try {
-      const res = await xvideosRecommendations({ url: videoUrl });
-      setRelData(res);
-    } finally {
-      setRelLoading(false);
+  // When fresh details arrive, seed from the embedded `related` list.
+  const seedRelated = useCallback((v) => {
+    if (v && Array.isArray(v.related)) {
+      setRelated(v.related);
+      setRecFetched(true);
+      setRecLoaded(false);
     }
-  };
+  }, []);
 
   const v = data;
   const thumbs = (v && v.thumbs) || {};
   const mainThumb = v?.thumb || thumbs.main;
   const streams = v?.streams || {};
   const hlsUrl = streams.hls;
+  const isXvideos = !videoUrl || /\bxvideos\.com\b/i.test(videoUrl);
+
+  const loadMoreRecommendations = async () => {
+    setRecLoading(true);
+    setRecError(null);
+    setRecLoaded(true);
+    try {
+      const res = await xvideosRecommendations({ url: videoUrl });
+      const items = (res && res.items) || [];
+      setRelated((prev) => {
+        // dedupe by id/link so appended items don't repeat
+        const seen = new Set(prev.map((it) => it.id ?? it.link));
+        const merged = prev.concat(items.filter((it) => !seen.has(it.id ?? it.link)));
+        setRecFetched(true);
+        return merged;
+      });
+    } catch (err) {
+      setRecError(err);
+    } finally {
+      setRecLoading(false);
+    }
+  };
 
   return (
     <section className="video-page">
@@ -59,10 +84,7 @@ export default function VideoPage() {
         <article className="video-detail">
           <div className="video-detail__player">
             {hlsUrl ? (
-              <video controls autoPlay poster={mainThumb} className="video-detail__video">
-                <source src={toHttps(hlsUrl)} type="application/x-mpegURL" />
-                Your browser doesn’t support HLS playback.
-              </video>
+              <HlsPlayer src={hlsUrl} poster={mainThumb} className="video-detail__video" />
             ) : (
               <div className="video-detail__thumb-wrap">
                 <img src={mainThumb} alt={v.title} referrerPolicy="no-referrer" />
@@ -123,26 +145,66 @@ export default function VideoPage() {
               >
                 Open on source ↗
               </a>
-              <button className="video-detail__related-toggle" onClick={loadRelated}>
-                Recommendations
-              </button>
             </div>
           </div>
 
-          {showRelated && (
-            <div className="video-detail__related">
-              <h3>Related videos</h3>
-              {relLoading && <Spinner label="Loading recommendations…" />}
-              {relData && relData.items && (
+          {/* Recommended videos */}
+          <div className="video-detail__related">
+            <div className="video-detail__related-head">
+              <h3>Recommended videos</h3>
+              {related.length ? (
+                <span className="muted video-detail__related-count">{related.length}</span>
+              ) : null}
+            </div>
+
+            {seedRelated && !recLoaded && v?.related?.length > 0 && (
+              <div className="video-grid">
+                {v.related.map((item, i) => (
+                  <VideoCard key={item.id ?? item.link ?? i} item={item} />
+                ))}
+              </div>
+            )}
+
+            {/* If the user hit "More", show the accumulated list */}
+            {recLoaded &&
+              (related.length ? (
                 <div className="video-grid">
-                  {relData.items.map((item, i) => (
+                  {related.map((item, i) => (
                     <VideoCard key={item.id ?? item.link ?? i} item={item} />
                   ))}
                 </div>
-              )}
-            </div>
-          )}
+              ) : (
+                <p className="empty">No related videos found.</p>
+              ))}
+
+            {recLoading && <Spinner label="Loading more recommendations…" />}
+            {recError && <ErrorState error={recError} onRetry={loadMoreRecommendations} title="Couldn’t load recommendations" />}
+
+            {/* Recommendations endpoint available only for xvideos */}
+            {isXvideos && !recLoading && (
+              <div className="load-more">
+                <button
+                  className="load-more__btn"
+                  onClick={loadMoreRecommendations}
+                  disabled={recLoading}
+                >
+                  {recLoaded ? 'Load more recommendations' : 'Show more recommendations'}
+                </button>
+              </div>
+            )}
+          </div>
         </article>
+      )}
+
+      {!v && !loading && !error && videoUrl && (
+        <div className="video-detail__nonxv">
+          <p className="muted">
+            This link isn’t from xvideos, so video details aren’t available here.
+          </p>
+          <a className="video-detail__open" href={videoUrl} target="_blank" rel="noreferrer noopener">
+            Open original ↗
+          </a>
+        </div>
       )}
     </section>
   );
