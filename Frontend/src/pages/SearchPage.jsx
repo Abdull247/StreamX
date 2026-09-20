@@ -1,32 +1,59 @@
-import { useEffect, useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { xvideosSearch } from '../api/streams.js';
 import useFetch from '../hooks/useFetch.js';
 import VideoCard from '../components/VideoCard.jsx';
 import SearchBar from '../components/SearchBar.jsx';
+import LoadMore from '../components/LoadMore.jsx';
 import Spinner from '../components/Spinner.jsx';
 import ErrorState from '../components/ErrorState.jsx';
 
 const SORTS = ['relevance', 'views', 'rating', 'date'];
 const QUALITIES = ['', 'hd', '1080p', '720p'];
 
-export default function SearchPage({ onSearch }) {
+export default function SearchPage({ onOpenVideo }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const q = searchParams.get('q') || '';
   const sort = searchParams.get('sort') || 'relevance';
   const quality = searchParams.get('quality') || '';
+
+  // Local accumulation for "load more"
+  const [page, setPage] = useState(0);
+  const [items, setItems] = useState([]);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   const { data, loading, error, refetch } = useFetch(
     () =>
       q
         ? xvideosSearch({ q, page: 0, limit: 48, sort, quality })
         : Promise.resolve(null),
-    { deps: [q, sort, quality] }
+    {
+      deps: [q, sort, quality],
+      onSuccess: (res) => {
+        setItems((res && res.items) || []);
+        setPage(0);
+      }
+    }
   );
 
-  const items = (data && data.items) || [];
+  const loadMore = async () => {
+    setLoadingMore(true);
+    try {
+      const next = page + 1;
+      const res = await xvideosSearch({ q, page: next, limit: 48, sort, quality });
+      setItems((prev) => {
+        const seen = new Set(prev.map((it) => it.id ?? it.link));
+        return prev.concat((res.items || []).filter((it) => !seen.has(it.id ?? it.link)));
+      });
+      setPage(next);
+    } catch (e) {
+      console.error('loadMore failed', e);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
-  // keep page title-ish state in sync
+  // keep page title state in sync
   useEffect(() => {
     if (!q && !searchParams.has('q')) {
       // nothing typed yet
@@ -90,7 +117,7 @@ export default function SearchPage({ onSearch }) {
               </p>
               <div className="video-grid">
                 {items.map((item, i) => (
-                  <VideoCard key={item.id ?? item.link ?? i} item={item} />
+                  <VideoCard key={item.id ?? item.link ?? i} item={item} onOpen={onOpenVideo} />
                 ))}
               </div>
             </>
@@ -98,6 +125,10 @@ export default function SearchPage({ onSearch }) {
             <p className="empty">No results for “{q}”.</p>
           )}
         </>
+      )}
+
+      {q && !loading && !error && items.length > 0 && (
+        <LoadMore loading={loadingMore} onLoadMore={loadMore} hasMore={items.length > 0} />
       )}
     </section>
   );
