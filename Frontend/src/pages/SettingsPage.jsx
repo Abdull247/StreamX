@@ -10,7 +10,6 @@ export default function SettingsPage({ backendUrl }) {
   const [cleared, setCleared] = useState(false);
   const [health, setHealth] = useState(null);
 
-  // Load provider list
   useEffect(() => {
     let mounted = true;
     fetchProviders()
@@ -28,7 +27,6 @@ export default function SettingsPage({ backendUrl }) {
     };
   }, []);
 
-  // Backend health
   useEffect(() => {
     let mounted = true;
     fetch(`${backendUrl}/api/health`)
@@ -47,7 +45,7 @@ export default function SettingsPage({ backendUrl }) {
   const clearCache = () => {
     cacheClear();
     setCleared(true);
-    setTimeout(() => setCleared(false), 2000);
+    setTimeout(() => setCleared(false), 2500);
   };
 
   return (
@@ -56,14 +54,14 @@ export default function SettingsPage({ backendUrl }) {
         <h1 className="page-title">Settings</h1>
       </header>
 
-      <div className="setting-card">
-        <h3>Default provider</h3>
-        <p className="muted">
-          The whole app (Home, Browse, Search, Details) will use this source for its endpoints.
+      <div className="settings__card">
+        <h3 className="settings__heading">Default provider</h3>
+        <p className="settings__desc">
+          The whole app (Home, Browse, Search, Details) will use this source.
         </p>
 
         {loadingProviders ? (
-          <p className="muted">Loading providers…</p>
+          <p className="settings__desc">Loading providers…</p>
         ) : providers.length ? (
           <div className="provider-options">
             {providers.map((p) => (
@@ -81,30 +79,33 @@ export default function SettingsPage({ backendUrl }) {
             ))}
           </div>
         ) : (
-          <p className="muted">Couldn’t load providers from the backend.</p>
+          <p className="settings__desc">Couldn’t load providers from the backend.</p>
         )}
       </div>
 
-      <div className="setting-card">
-        <h3>Cache</h3>
-        <p className="muted">
+      <div className="settings__card">
+        <h3 className="settings__heading">Cache</h3>
+        <p className="settings__desc">
           Cached listings and details avoid refetching when navigating between pages.
         </p>
-        <button className="btn btn--ghost" onClick={clearCache}>
+        <button className="settings__retry" onClick={clearCache}>
           {cleared ? 'Cache cleared ✓' : 'Clear cache'}
         </button>
       </div>
 
-      <div className="setting-card">
-        <h3>About</h3>
-        <p className="muted">API base URL: <code>{backendUrl}</code></p>
-        {health ? (
-          <p className="muted">
-            Backend: <span className="ok">{health.status}</span> · {health.service}
-          </p>
-        ) : (
-          <p className="muted">Backend: <span className="bad">unreachable</span></p>
-        )}
+      <div className="settings__card">
+        <h3 className="settings__heading">About</h3>
+        <div className="settings__row">
+          <span className="settings__label">API base URL</span>
+          <span className="settings__value">{backendUrl}</span>
+        </div>
+        <div className="settings__row">
+          <span className="settings__label">Backend status</span>
+          <span className={'settings__status ' + (health ? 'settings__status--ok' : 'settings__status--down')}>
+            <span className="settings__dot" />
+            {health ? health.status : 'offline'}
+          </span>
+        </div>
       </div>
     </section>
   );
