@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useCallback } from 'react';
 import { xvideosHome, xvideosBest, enkuddiHome } from '../api/streams.js';
 import useFetch from '../hooks/useFetch.js';
 import VideoCard from '../components/VideoCard.jsx';
