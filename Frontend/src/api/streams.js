@@ -1,44 +1,40 @@
-// Endpoint helpers for the StreamX API.
-// Mirrors the server routes: /api/health, /api/xvideos/*, /api/enkuddi/*
-import { request } from './client.js';
+// Stream endpoint helpers. Each accepts an optional `provider` field so the
+// app-wide default source can be passed through; the backend routes by suffix.
 
-export const health = () =>
-  request('/api/health');
+import { clientGet, clientPost } from './client.js';
 
-// --- xvideos ---
+/** XVIDEOS */
 
-export const xvideosHome = ({ page = 0, limit = 48 } = {}) =>
-  request('/api/xvideos/home', { query: { page, limit } });
+export function xvideosHome({ page = 0, limit = 24, provider } = {}) {
+  return clientGet('/api/xvideos/home', { page, limit, provider });
+}
 
-export const xvideosBest = ({ page = 0, limit = 48 } = {}) =>
-  request('/api/xvideos/best', { query: { page, limit } });
+export function xvideosSearch({ q, page = 0, limit = 24, sort, quality, provider } = {}) {
+  return clientGet('/api/xvideos/search', { q, page, limit, sort, quality, provider });
+}
 
-export const xvideosSearch = ({
-  q,
-  page = 0,
-  limit = 48,
-  sort = 'relevance',
-  quality = '',
-  duration = '',
-  date = ''
-} = {}) =>
-  request('/api/xvideos/search', {
-    query: { q, page, limit, sort, quality, duration, date }
-  });
+export function xvideosBest({ page = 0, limit = 24, provider } = {}) {
+  return clientGet('/api/xvideos/best', { page, limit, provider });
+}
 
-export const xvideosCategory = ({ cat, page = 0, limit = 48 } = {}) =>
-  request('/api/xvideos/category', { query: { cat, page, limit } });
+export function xvideosCategory({ cat, page = 0, limit = 24, provider } = {}) {
+  return clientGet('/api/xvideos/category', { cat, page, limit, provider });
+}
 
-export const xvideosDetails = ({ url, eid } = {}) =>
-  request('/api/xvideos/details', { query: { url, eid } });
+export function xvideosDetails({ url, provider } = {}) {
+  return clientGet('/api/xvideos/details', { url, provider });
+}
 
-export const xvideosRecommendations = ({ url } = {}) =>
-  request('/api/xvideos/recommendations', { query: { url } });
+export function xvideosRecommendations({ url, provider } = {}) {
+  return clientGet('/api/xvideos/recommendations', { url, provider });
+}
 
-// --- enkuddi ---
+/** ENKUDDI */
 
-export const enkuddiHome = ({ page = 1, limit = 24 } = {}) =>
-  request('/api/enkuddi/home', { query: { page, limit } });
+export function enkuddiHome({ page = 1, limit = 24, provider } = {}) {
+  return clientGet('/api/enkuddi/home', { page, limit, provider });
+}
 
-export const enkuddiSearch = ({ q, page = 1, limit = 24 } = {}) =>
-  request('/api/enkuddi/search', { query: { q, page, limit } });
+export function enkuddiSearch({ q, page = 1, limit = 24, provider } = {}) {
+  return clientGet('/api/enkuddi/search', { q, page, limit, provider });
+}
