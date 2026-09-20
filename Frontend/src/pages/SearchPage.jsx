@@ -1,7 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { xvideosSearch } from '../api/streams.js';
-import useFetch from '../hooks/useFetch.js';
+import useCacheFetch from '../hooks/useCacheFetch.js';
+import { cacheKey, cacheGet, cacheSet } from '../utils/cache.js';
+import { useProvider } from '../utils/providerContext.js';
 import VideoCard from '../components/VideoCard.jsx';
 import SearchBar from '../components/SearchBar.jsx';
 import LoadMore from '../components/LoadMore.jsx';
@@ -13,22 +15,30 @@ const QUALITIES = ['', 'hd', '1080p', '720p'];
 
 export default function SearchPage({ onOpenVideo }) {
   const [searchParams, setSearchParams] = useSearchParams();
+  const { provider } = useProvider();
+  const providerId = provider?.id || 'xvideos';
+
   const q = searchParams.get('q') || '';
   const sort = searchParams.get('sort') || 'relevance';
   const quality = searchParams.get('quality') || '';
 
-  // Local accumulation for "load more"
+  const [items, setItems] = useState(() => {
+    if (!q) return [];
+    const cached = cacheGet(cacheKey('search', { q, sort, quality, provider: providerId }));
+    return (cached && cached.items) || [];
+  });
   const [page, setPage] = useState(0);
-  const [items, setItems] = useState([]);
   const [loadingMore, setLoadingMore] = useState(false);
 
-  const { data, loading, error, refetch } = useFetch(
+  const { data, loading, error, refetch } = useCacheFetch(
     () =>
       q
-        ? xvideosSearch({ q, page: 0, limit: 48, sort, quality })
+        ? xvideosSearch({ q, page: 0, limit: 48, sort, quality, provider: providerId })
         : Promise.resolve(null),
     {
-      deps: [q, sort, quality],
+      key: q ? cacheKey('search', { q, sort, quality, provider: providerId }) : null,
+      cacheTtlMs: 5 * 60 * 1000,
+      deps: [q, sort, quality, providerId],
       onSuccess: (res) => {
         setItems((res && res.items) || []);
         setPage(0);
@@ -40,7 +50,12 @@ export default function SearchPage({ onOpenVideo }) {
     setLoadingMore(true);
     try {
       const next = page + 1;
-      const res = await xvideosSearch({ q, page: next, limit: 48, sort, quality });
+      const pk = cacheKey('search', { q, sort, quality, provider: providerId, page: next });
+      let res = cacheGet(pk);
+      if (!res) {
+        res = await xvideosSearch({ q, page: next, limit: 48, sort, quality, provider: providerId });
+        cacheSet(pk, res, 5 * 60 * 1000);
+      }
       setItems((prev) => {
         const seen = new Set(prev.map((it) => it.id ?? it.link));
         return prev.concat((res.items || []).filter((it) => !seen.has(it.id ?? it.link)));
@@ -52,14 +67,6 @@ export default function SearchPage({ onOpenVideo }) {
       setLoadingMore(false);
     }
   };
-
-  // keep page title state in sync
-  useEffect(() => {
-    if (!q && !searchParams.has('q')) {
-      // nothing typed yet
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q]);
 
   const setParam = (key, value) => {
     const next = new URLSearchParams(searchParams);
@@ -105,8 +112,8 @@ export default function SearchPage({ onOpenVideo }) {
         </div>
       )}
 
-      {loading && <Spinner label="Searching…" />}
-      {error && <ErrorState error={error} onRetry={refetch} title="Search failed" />}
+      {loading && !items.length && <Spinner label="Searching…" />}
+      {error && !items.length && <ErrorState error={error} onRetry={refetch} title="Search failed" />}
 
       {q && !loading && !error && (
         <>
