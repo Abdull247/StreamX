@@ -41,5 +41,3 @@ export async function clientPost(path, body = {}) {
   }
   return res.json();
 }
-
-export { BACKEND_BASE_URL as BACKEND_BASE_URL };
