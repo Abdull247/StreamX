@@ -1,12 +1,54 @@
-import { health } from '../api/streams.js';
-import { BACKEND_BASE_URL } from '../api/client.js';
-import useFetch from '../hooks/useFetch.js';
-import Spinner from '../components/Spinner.jsx';
-import ErrorState from '../components/ErrorState.jsx';
+import { useState, useEffect } from 'react';
+import { fetchProviders, getDefaultProviderId, setDefaultProviderId } from '../utils/providers.js';
+import { cacheClear } from '../utils/cache.js';
 import './SettingsPage.css';
 
-export default function SettingsPage({ backendUrl = BACKEND_BASE_URL }) {
-  const { data, loading, error, refetch } = useFetch(health, { deps: [] });
+export default function SettingsPage({ backendUrl }) {
+  const [providers, setProviders] = useState([]);
+  const [selected, setSelected] = useState(() => getDefaultProviderId());
+  const [loadingProviders, setLoadingProviders] = useState(true);
+  const [cleared, setCleared] = useState(false);
+  const [health, setHealth] = useState(null);
+
+  // Load provider list
+  useEffect(() => {
+    let mounted = true;
+    fetchProviders()
+      .then((list) => {
+        if (mounted) {
+          setProviders(list);
+          setLoadingProviders(false);
+        }
+      })
+      .catch(() => {
+        if (mounted) setLoadingProviders(false);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  // Backend health
+  useEffect(() => {
+    let mounted = true;
+    fetch(`${backendUrl}/api/health`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((h) => h && mounted && setHealth(h))
+      .catch(() => {});
+    return () => {
+      mounted = false;
+    };
+  }, [backendUrl]);
+
+  const changeProvider = (id) => {
+    setSelected(setDefaultProviderId(id));
+  };
+
+  const clearCache = () => {
+    cacheClear();
+    setCleared(true);
+    setTimeout(() => setCleared(false), 2000);
+  };
 
   return (
     <section className="settings">
@@ -14,36 +56,55 @@ export default function SettingsPage({ backendUrl = BACKEND_BASE_URL }) {
         <h1 className="page-title">Settings</h1>
       </header>
 
-      <div className="settings__card">
-        <h2 className="settings__heading">Backend</h2>
-        <p className="settings__desc">
-          This is the base URL the frontend calls for all API requests. Configure it in
-          <code className="settings__code"> .env.development </code> via
-          <code className="settings__code"> VITE_API_BASE_URL</code>.
+      <div className="setting-card">
+        <h3>Default provider</h3>
+        <p className="muted">
+          The whole app (Home, Browse, Search, Details) will use this source for its endpoints.
         </p>
-        <div className="settings__row">
-          <span className="settings__label">Active base URL</span>
-          <code className="settings__value">{backendUrl}</code>
-        </div>
-        <div className="settings__row">
-          <span className="settings__label">Backend status</span>
-          {loading && <Spinner label="Checking…" />}
-          {error && (
-            <div className="settings__status settings__status--down">
-              <span className="settings__dot" /> Unreachable — start the API server
-            </div>
-          )}
-          {data && (
-            <div className="settings__status settings__status--ok">
-              <span className="settings__dot" /> Live · service: {data.service || 'StreamX API'}
-            </div>
-          )}
-        </div>
-        {error ? (
-          <button className="settings__retry" onClick={refetch}>
-            Retry health check
-          </button>
-        ) : null}
+
+        {loadingProviders ? (
+          <p className="muted">Loading providers…</p>
+        ) : providers.length ? (
+          <div className="provider-options">
+            {providers.map((p) => (
+              <label key={p.id} className={'provider-option' + (selected === p.id ? ' is-active' : '')}>
+                <input
+                  type="radio"
+                  name="provider"
+                  value={p.id}
+                  checked={selected === p.id}
+                  onChange={() => changeProvider(p.id)}
+                />
+                <span className="provider-option__name">{p.name}</span>
+                <span className="provider-option__label">{p.label}</span>
+              </label>
+            ))}
+          </div>
+        ) : (
+          <p className="muted">Couldn’t load providers from the backend.</p>
+        )}
+      </div>
+
+      <div className="setting-card">
+        <h3>Cache</h3>
+        <p className="muted">
+          Cached listings and details avoid refetching when navigating between pages.
+        </p>
+        <button className="btn btn--ghost" onClick={clearCache}>
+          {cleared ? 'Cache cleared ✓' : 'Clear cache'}
+        </button>
+      </div>
+
+      <div className="setting-card">
+        <h3>About</h3>
+        <p className="muted">API base URL: <code>{backendUrl}</code></p>
+        {health ? (
+          <p className="muted">
+            Backend: <span className="ok">{health.status}</span> · {health.service}
+          </p>
+        ) : (
+          <p className="muted">Backend: <span className="bad">unreachable</span></p>
+        )}
       </div>
     </section>
   );
