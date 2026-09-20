@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { xvideosDetails, xvideosRecommendations } from '../api/streams.js';
 import useCacheFetch from '../hooks/useCacheFetch.js';
 import { cacheKey, cacheGet, cacheSet } from '../utils/cache.js';
@@ -13,6 +13,7 @@ import './VideoPage.css';
 
 export default function VideoPage() {
   const { link } = useParams();
+  const navigate = useNavigate();
   const { provider } = useProvider();
   const providerId = provider?.id || 'xvideos';
 
@@ -33,6 +34,14 @@ export default function VideoPage() {
       cacheTtlMs: 5 * 60 * 1000,
       deps: [videoUrl, providerId]
     }
+  );
+
+  const goToVideo = useCallback(
+    (item) => {
+      const dest = item?.link || item?.url;
+      if (dest) navigate(`/video/${encodeURIComponent(dest)}`);
+    },
+    [navigate]
   );
 
   const thumbs = (v && v.thumbs) || {};
@@ -132,13 +141,7 @@ export default function VideoPage() {
             videoUrl={videoUrl}
             providerId={providerId}
             embedded={v.related}
-            onOpenVideo={(item) => {
-              const dest = item.link || item.url;
-              if (dest) {
-                // reuse existing in-app navigation by linking back into the router
-                window.location.href = `/#/video/${encodeURIComponent(dest)}`;
-              }
-            }}
+            onOpenVideo={goToVideo}
           />
         </article>
       )}
@@ -158,7 +161,7 @@ function Recommendations({ videoUrl, providerId, embedded = [], onOpenVideo }) {
     return res;
   }, [videoUrl, providerId, recKey]);
 
-  const items = (loadMore && embedded) || embedded || [];
+  const items = embedded || [];
 
   return (
     <div className="video-detail__related">
