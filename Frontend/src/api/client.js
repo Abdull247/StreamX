@@ -1,65 +1,45 @@
-// API client. Reads the backend base URL from Vite env.
-// Falls back to a sensible dev default when the var is unset.
+// Thin fetch wrapper around the StreamX backend.
+// Base URL comes from VITE_API_BASE_URL (see .env.example), defaulting to
+// http://localhost:3001. Optionally passes a `provider` param on GET requests.
+export const BACKEND_BASE_URL =
+  (import.meta.env && import.meta.env.VITE_API_BASE_URL) ||
+  'http://localhost:3001';
 
-const envBaseUrl =
-  (import.meta.env && import.meta.env.VITE_API_BASE_URL) || '';
-
-export const BACKEND_BASE_URL = (envBaseUrl || 'http://localhost:3001').replace(/\/+$/, '');
-
-const DEFAULT_TIMEOUT_MS = 20000;
-
-/**
- * Core fetch wrapper used by all endpoint helpers.
- * - Builds absolute URL: BACKEND_BASE_URL + path
- * - Optional query object -> URLSearchParams
- * - Optional JSON body -> POST { headers JSON, body }
- * - Timeout + uniform error handling
- */
-async function request(path, { query, body, timeout = DEFAULT_TIMEOUT_MS } = {}) {
-  const url = new URL(BACKEND_BASE_URL + path);
-  if (query) {
-    Object.entries(query).forEach(([key, value]) => {
-      if (value !== undefined && value !== null && value !== '') {
-        url.searchParams.set(key, String(value));
-      }
-    });
-  }
-
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeout);
-
-  try {
-    const init = {
-      method: body ? 'POST' : 'GET',
-      headers: body ? { 'Content-Type': 'application/json' } : {},
-      signal: controller.signal
-    };
-    if (body) init.body = JSON.stringify(body);
-
-    const res = await fetch(url.toString(), init);
-    let data = null;
+export async function clientGet(path, params = {}) {
+  const query = new URLSearchParams();
+  Object.entries(params || {}).forEach(([k, v]) => {
+    if (v !== undefined && v !== null && v !== '') query.set(k, v);
+  });
+  const qs = query.toString();
+  const res = await fetch(`${BACKEND_BASE_URL}${path}${qs ? '?' + qs : ''}`, {
+    headers: { Accept: 'application/json' }
+  });
+  if (!res.ok) {
+    let message = `HTTP ${res.status}`;
     try {
-      data = await res.json();
-    } catch {
-      data = await res.text();
-    }
-
-    if (!res.ok) {
-      const message =
-        (data && typeof data === 'object' && data.error) ||
-        `Request failed with status ${res.status}`;
-      throw new Error(message);
-    }
-
-    return data;
-  } catch (err) {
-    if (err.name === 'AbortError') {
-      throw new Error(`Request timed out after ${timeout}ms`);
-    }
-    throw err;
-  } finally {
-    clearTimeout(timer);
+      const body = await res.json();
+      if (body && body.error) message = body.error;
+    } catch {}
+    throw new Error(message);
   }
+  return res.json();
 }
 
-export { request };
+export async function clientPost(path, body = {}) {
+  const res = await fetch(`${BACKEND_BASE_URL}${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify(body || {})
+  });
+  if (!res.ok) {
+    let message = `HTTP ${res.status}`;
+    try {
+      const json = await res.json();
+      if (json && json.error) message = json.error;
+    } catch {}
+    throw new Error(message);
+  }
+  return res.json();
+}
+
+export { BACKEND_BASE_URL as BACKEND_BASE_URL };

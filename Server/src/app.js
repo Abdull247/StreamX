@@ -7,6 +7,7 @@ const buildApp = async () => {
   await app.register(cors, { origin: true });
 
   app.register(require('./routes/health'));
+  app.register(require('./routes/providers'), { prefix: '/api' });
   app.register(require('./routes/xvideos'), { prefix: '/api/xvideos' });
   app.register(require('./routes/enkuddi'), { prefix: '/api/enkuddi' });
 

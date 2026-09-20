@@ -1,7 +1,9 @@
-import { useState, useCallback } from 'react';
-import { useParams } from 'react-router-dom';
+import { useCallback } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { xvideosDetails, xvideosRecommendations } from '../api/streams.js';
-import useFetch from '../hooks/useFetch.js';
+import useCacheFetch from '../hooks/useCacheFetch.js';
+import { cacheKey, cacheGet, cacheSet } from '../utils/cache.js';
+import { useProvider } from '../utils/providerContext.js';
 import VideoCard from '../components/VideoCard.jsx';
 import HlsPlayer from '../components/HlsPlayer.jsx';
 import Spinner from '../components/Spinner.jsx';
@@ -11,8 +13,10 @@ import './VideoPage.css';
 
 export default function VideoPage() {
   const { link } = useParams();
+  const navigate = useNavigate();
+  const { provider } = useProvider();
+  const providerId = provider?.id || 'xvideos';
 
-  // The route passes the encoded video URL as :link
   const videoUrl = (() => {
     try {
       return link ? decodeURIComponent(link) : '';
@@ -21,55 +25,29 @@ export default function VideoPage() {
     }
   })();
 
-  const { data, loading, error, refetch } = useFetch(
-    () => (videoUrl ? xvideosDetails({ url: videoUrl }) : Promise.resolve(null)),
-    { deps: [videoUrl] }
+  const isXvideos = !videoUrl || /\bxvideos\.com\b/i.test(videoUrl);
+
+  const { data: v, loading, error, refetch } = useCacheFetch(
+    () => (videoUrl ? xvideosDetails({ url: videoUrl, provider: providerId }) : Promise.resolve(null)),
+    {
+      key: videoUrl ? cacheKey('details', { url: videoUrl, provider: providerId }) : null,
+      cacheTtlMs: 5 * 60 * 1000,
+      deps: [videoUrl, providerId]
+    }
   );
 
-  // Recommendations: embedded `related` from /details initially,
-  // "More" button fetches /recommendations and appends.
-  const [related, setRelated] = useState([]);
-  const [recLoading, setRecLoading] = useState(false);
-  const [recError, setRecError] = useState(null);
-  const [recFetched, setRecFetched] = useState(false);
-  const [recLoaded, setRecLoaded] = useState(false); // whether the button has been pressed
+  const goToVideo = useCallback(
+    (item) => {
+      const dest = item?.link || item?.url;
+      if (dest) navigate(`/video/${encodeURIComponent(dest)}`);
+    },
+    [navigate]
+  );
 
-  // When fresh details arrive, seed from the embedded `related` list.
-  const seedRelated = useCallback((v) => {
-    if (v && Array.isArray(v.related)) {
-      setRelated(v.related);
-      setRecFetched(true);
-      setRecLoaded(false);
-    }
-  }, []);
-
-  const v = data;
   const thumbs = (v && v.thumbs) || {};
   const mainThumb = v?.thumb || thumbs.main;
   const streams = v?.streams || {};
   const hlsUrl = streams.hls;
-  const isXvideos = !videoUrl || /\bxvideos\.com\b/i.test(videoUrl);
-
-  const loadMoreRecommendations = async () => {
-    setRecLoading(true);
-    setRecError(null);
-    setRecLoaded(true);
-    try {
-      const res = await xvideosRecommendations({ url: videoUrl });
-      const items = (res && res.items) || [];
-      setRelated((prev) => {
-        // dedupe by id/link so appended items don't repeat
-        const seen = new Set(prev.map((it) => it.id ?? it.link));
-        const merged = prev.concat(items.filter((it) => !seen.has(it.id ?? it.link)));
-        setRecFetched(true);
-        return merged;
-      });
-    } catch (err) {
-      setRecError(err);
-    } finally {
-      setRecLoading(false);
-    }
-  };
 
   return (
     <section className="video-page">
@@ -77,8 +55,19 @@ export default function VideoPage() {
         <h1 className="page-title page-title--center">Now Playing</h1>
       </header>
 
-      {loading && <Spinner label="Loading video…" />}
-      {error && <ErrorState error={error} onRetry={refetch} title="Couldn’t load video" />}
+      {loading && !v && <Spinner label="Loading video…" />}
+      {error && !v && <ErrorState error={error} onRetry={refetch} title="Couldn’t load video" />}
+
+      {!isXvideos && !v && !loading && !error && (
+        <div className="video-detail__nonxv">
+          <p className="muted">
+            This provider doesn’t expose a rich details page yet. Open it on the source instead.
+          </p>
+          <a className="video-detail__open" href={videoUrl} target="_blank" rel="noreferrer noopener">
+            Open original ↗
+          </a>
+        </div>
+      )}
 
       {v && (
         <article className="video-detail">
@@ -148,64 +137,54 @@ export default function VideoPage() {
             </div>
           </div>
 
-          {/* Recommended videos */}
-          <div className="video-detail__related">
-            <div className="video-detail__related-head">
-              <h3>Recommended videos</h3>
-              {related.length ? (
-                <span className="muted video-detail__related-count">{related.length}</span>
-              ) : null}
-            </div>
-
-            {seedRelated && !recLoaded && v?.related?.length > 0 && (
-              <div className="video-grid">
-                {v.related.map((item, i) => (
-                  <VideoCard key={item.id ?? item.link ?? i} item={item} />
-                ))}
-              </div>
-            )}
-
-            {/* If the user hit "More", show the accumulated list */}
-            {recLoaded &&
-              (related.length ? (
-                <div className="video-grid">
-                  {related.map((item, i) => (
-                    <VideoCard key={item.id ?? item.link ?? i} item={item} />
-                  ))}
-                </div>
-              ) : (
-                <p className="empty">No related videos found.</p>
-              ))}
-
-            {recLoading && <Spinner label="Loading more recommendations…" />}
-            {recError && <ErrorState error={recError} onRetry={loadMoreRecommendations} title="Couldn’t load recommendations" />}
-
-            {/* Recommendations endpoint available only for xvideos */}
-            {isXvideos && !recLoading && (
-              <div className="load-more">
-                <button
-                  className="load-more__btn"
-                  onClick={loadMoreRecommendations}
-                  disabled={recLoading}
-                >
-                  {recLoaded ? 'Load more recommendations' : 'Show more recommendations'}
-                </button>
-              </div>
-            )}
-          </div>
+          <Recommendations
+            videoUrl={videoUrl}
+            providerId={providerId}
+            embedded={v.related}
+            onOpenVideo={goToVideo}
+          />
         </article>
       )}
-
-      {!v && !loading && !error && videoUrl && (
-        <div className="video-detail__nonxv">
-          <p className="muted">
-            This link isn’t from xvideos, so video details aren’t available here.
-          </p>
-          <a className="video-detail__open" href={videoUrl} target="_blank" rel="noreferrer noopener">
-            Open original ↗
-          </a>
-        </div>
-      )}
     </section>
+  );
+}
+
+function Recommendations({ videoUrl, providerId, embedded = [], onOpenVideo }) {
+  const recKey = videoUrl ? cacheKey('recommendations', { url: videoUrl, provider: providerId }) : null;
+
+  const loadMore = useCallback(async () => {
+    if (!videoUrl || !recKey) return;
+    const existing = cacheGet(recKey);
+    if (existing) return existing;
+    const res = await xvideosRecommendations({ url: videoUrl, provider: providerId });
+    cacheSet(recKey, res, 5 * 60 * 1000);
+    return res;
+  }, [videoUrl, providerId, recKey]);
+
+  const items = embedded || [];
+
+  return (
+    <div className="video-detail__related">
+      <div className="video-detail__related-head">
+        <h3>Recommended videos</h3>
+        <span className="muted video-detail__related-count">from {providerId}</span>
+      </div>
+
+      {items.length ? (
+        <div className="video-grid">
+          {items.map((item, i) => (
+            <VideoCard key={item.id ?? item.link ?? i} item={item} onOpen={onOpenVideo} />
+          ))}
+        </div>
+      ) : (
+        <p className="empty">No related videos found.</p>
+      )}
+
+      <div className="load-more">
+        <button className="load-more__btn" onClick={loadMore}>
+          Show more recommendations
+        </button>
+      </div>
+    </div>
   );
 }
