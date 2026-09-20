@@ -1,0 +1,1 @@
+The frontend directory where the react frontend application would be.

@@ -1,0 +1,18 @@
+{
+  "plugin": "org.smartide.plugin.framework.javascript.fastify",
+  "run": "npm install && node index.js",
+  "intelligence": {
+    ".json": {
+      "enabled": true,
+      "run": "vscode-json-language-server --stdio"
+    },
+    ".js": {
+      "enabled": true,
+      "run": "typescript-language-server --stdio"
+    },
+    ".md": {
+      "enabled": true,
+      "run": "marksman server"
+    }
+  }
+}
