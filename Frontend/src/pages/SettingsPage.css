@@ -86,3 +86,44 @@
 .settings__retry:hover {
   background: rgba(255, 255, 255, 0.08);
 }
+
+/* Provider selector */
+.provider-options {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.provider-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+  background: var(--bg-elevated);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.provider-option.is-active {
+  border-color: var(--accent);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.provider-option input[type='radio'] {
+  accent-color: var(--accent);
+  margin: 0;
+}
+
+.provider-option__name {
+  font-weight: 600;
+  font-size: 0.92rem;
+  color: var(--text);
+  flex: none;
+}
+
+.provider-option__label {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
